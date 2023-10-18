@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	MinStudents  = 30 // minimum students in a class
-	MaxStudents  = 40 // maximum students in a class
-	TotalClasses = 10 // total classes in a school
+	MinStudents  = 10 // minimum students in a class
+	MaxStudents  = 10 // maximum students in a class
+	TotalClasses = 3  // total classes in a school
 )
 
 var (
-	startWorkChan = make(chan struct{}, 5)
+	startWorkChan = make(chan struct{}, 2)
 	OutDir        = "./out"
 )
 
@@ -147,9 +147,11 @@ func (s *schoolMaker) createClass(name string, classChan chan<- types.Class) {
 	// select a random student count between min and max student count
 	studentCount := random.GetIntBetween(MinStudents, MaxStudents)
 
-	students := s.getStudents(studentCount)
+	// students := s.getStudents(studentCount)
+	students := s.getStudentsNew(studentCount)
 
 	fmt.Println("chan: ", name, "completed....")
+
 	classChan <- types.Class{
 		Name:          name,
 		Students:      students,
@@ -157,6 +159,31 @@ func (s *schoolMaker) createClass(name string, classChan chan<- types.Class) {
 	}
 }
 
+func (s *schoolMaker) getStudentsNew(count int) []types.Student {
+
+	var (
+		nameChan    = make(chan string)
+		studentChan = make(chan []types.Student)
+
+		startIdx = 0
+		endIdx   = len(s.studentsNames) - 1
+	)
+
+	// run this make students in separate go routines to create student concurrently
+	go random.MakeStudents(nameChan, studentChan)
+
+	for i := 1; i <= count; i++ {
+		nameChan <- s.studentsNames[random.GetIntBetween(startIdx, endIdx)]
+	}
+
+	// once all the name send completed close the channel to notify the names completed
+	close(nameChan)
+
+	// receive the student lists and return it
+	return <-studentChan
+}
+
+// old way
 func (s *schoolMaker) getStudents(count int) []types.Student {
 
 	// get random students
@@ -208,6 +235,8 @@ func main() {
 	fmt.Scanf("%s", &schoolName)
 
 	school := schoolMaker.CreateSchool(schoolName)
+
+	_ = school
 
 	// write the school data on json and xml  file
 	wg.Add(2)
