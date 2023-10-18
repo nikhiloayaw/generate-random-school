@@ -180,7 +180,6 @@ func main() {
 	var (
 		wg         sync.WaitGroup
 		schoolName string
-		start      = time.Now()
 	)
 
 	// create the output directory
@@ -193,6 +192,8 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to get all names: ", err)
 	}
+
+	start := time.Now()
 
 	schoolMaker := NewSchoolMaker(names)
 

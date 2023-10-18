@@ -7,7 +7,6 @@ import (
 var (
 	// used only for read purpose so no need of mutex
 	genders = [...]string{"male", "female"} // genders list
-
 )
 
 // To get a random gender from list of genders

@@ -21,7 +21,8 @@ const (
 )
 
 var (
-	OutDir = "./out"
+	startWorkChan = make(chan struct{}, 5)
+	OutDir        = "./out"
 )
 
 func ConvertToJSON(data any) ([]byte, error) {
@@ -86,20 +87,25 @@ func GetAllNames() ([]string, error) {
 	return names, nil
 }
 
-type SchoolMaker struct {
+// school maker functionalities
+type SchoolMaker interface {
+	CreateSchool(schoolName string) types.School
+}
+
+type schoolMaker struct {
 	mu            sync.RWMutex
 	studentsNames []string
 }
 
 func NewSchoolMaker(names []string) SchoolMaker {
 
-	return SchoolMaker{
+	return &schoolMaker{
 		mu:            sync.RWMutex{},
 		studentsNames: names,
 	}
 }
 
-func (s *SchoolMaker) CreateSchool(schoolName string) types.School {
+func (s *schoolMaker) CreateSchool(schoolName string) types.School {
 
 	var (
 		classChan = make(chan types.Class, 3)
@@ -111,8 +117,10 @@ func (s *SchoolMaker) CreateSchool(schoolName string) types.School {
 		// fire create class in separate goroutines to do concurrent
 		for i := 1; i <= TotalClasses; i++ {
 
-			className = fmt.Sprintf("class-%d", i)
+			// before we firing new go routine  check the limit of max goroutines run
+			startWorkChan <- struct{}{} // if the channel it's full then wait for others to complete their work
 
+			className = fmt.Sprintf("class-%d", i)
 			go s.createClass(className, classChan)
 		}
 
@@ -122,6 +130,8 @@ func (s *SchoolMaker) CreateSchool(schoolName string) types.School {
 	for i := 1; i <= TotalClasses; i++ {
 
 		classes[i-1] = <-classChan
+		// release  values from channel whenever goroutines work completed by sending class
+		<-startWorkChan
 	}
 
 	return types.School{
@@ -130,13 +140,16 @@ func (s *SchoolMaker) CreateSchool(schoolName string) types.School {
 	}
 }
 
-func (s *SchoolMaker) createClass(name string, classChan chan<- types.Class) {
+func (s *schoolMaker) createClass(name string, classChan chan<- types.Class) {
+
+	fmt.Println("chan: ", name, "started....")
 
 	// select a random student count between min and max student count
 	studentCount := random.GetIntBetween(MinStudents, MaxStudents)
 
 	students := s.getStudents(studentCount)
 
+	fmt.Println("chan: ", name, "completed....")
 	classChan <- types.Class{
 		Name:          name,
 		Students:      students,
@@ -144,13 +157,13 @@ func (s *SchoolMaker) createClass(name string, classChan chan<- types.Class) {
 	}
 }
 
-func (s *SchoolMaker) getStudents(count int) []types.Student {
+func (s *schoolMaker) getStudents(count int) []types.Student {
 
 	// get random students
 	return random.GetStudentsByNames(s.getNames(count))
 }
 
-func (s *SchoolMaker) getNames(count int) []string {
+func (s *schoolMaker) getNames(count int) []string {
 
 	names := make([]string, count)
 
@@ -174,7 +187,6 @@ func main() {
 	var (
 		wg         sync.WaitGroup
 		schoolName string
-		start      = time.Now()
 	)
 
 	// create the output directory
@@ -187,6 +199,8 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to get all names: ", err)
 	}
+
+	start := time.Now()
 
 	schoolMaker := NewSchoolMaker(names)
 

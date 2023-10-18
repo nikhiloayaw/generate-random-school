@@ -6,6 +6,11 @@ import (
 	"sort"
 )
 
+const (
+	MinAge = 12
+	MaxAge = 18
+)
+
 // To get random students by names
 func GetStudentsByNames(names []string) []types.Student {
 
@@ -27,10 +32,17 @@ func GetStudentsByNames(names []string) []types.Student {
 
 	students := make([]types.Student, len(names))
 
+	// in a class all students age should be almost same(like : 12,13,14)
+	randomAge := GetIntBetween(MinAge, MaxAge)
+
+	// new min and max age so in this call all students age will be in this new min and max age range
+	newMinAge, newMaxAge := randomAge-1, randomAge+1
+
 	for idx, randIdx := range randIndexes {
 
 		student := types.Student{
 			Name:       names[randIdx],
+			Age:        uint(GetIntBetween(newMinAge, newMaxAge)),
 			RollNumber: uint(randIdx) + 1,
 			Gender:     GetGender(),
 			Scores:     GetAllSubjects(),

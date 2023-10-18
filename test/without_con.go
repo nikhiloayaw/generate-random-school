@@ -161,7 +161,6 @@
 // 	var (
 // 		wg         sync.WaitGroup
 // 		schoolName string
-// 		start      = time.Now()
 // 	)
 
 // 	// create the output directory
@@ -175,6 +174,7 @@
 // 		log.Fatal("failed to get all names: ", err)
 // 	}
 
+// 	start := time.Now()
 // 	schoolMaker := NewSchoolMaker(names)
 
 // 	fmt.Print("Enter the school name: ")

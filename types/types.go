@@ -21,6 +21,7 @@ type Class struct {
 
 type Student struct {
 	Name       string
+	Age        uint
 	RollNumber uint // ascending order based on name
 	Gender     string
 	Scores     []Subject
