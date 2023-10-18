@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"school/random"
+	"school/school"
 	"school/types"
 	"sync"
 	"time"
@@ -15,14 +16,20 @@ import (
 )
 
 const (
-	MinStudents  = 10 // minimum students in a class
-	MaxStudents  = 10 // maximum students in a class
-	TotalClasses = 3  // total classes in a school
+	MinStudents = 30 // minimum students in a class
+	MaxStudents = 40 // maximum students in a class
+	MaxClasses  = 10 // maximum classes in a school
 )
 
 var (
 	startWorkChan = make(chan struct{}, 2)
 	OutDir        = "./out"
+
+	NamesSheetFileName = "./inputs/names.xls"
+	NamesSheetName     = "names"
+
+	StatesSheetFileName = "./inputs/states.xlsx"
+	StatesSheetName     = "states"
 )
 
 func ConvertToJSON(data any) ([]byte, error) {
@@ -45,6 +52,96 @@ func ConvertToXML(data any) ([]byte, error) {
 	return b, nil
 }
 
+func ConvertToExcel(school types.School) error {
+
+	f := excelize.NewFile()
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	sheetName := "school"
+	index, err := f.NewSheet(sheetName)
+	if err != nil {
+		return fmt.Errorf("failed to create sheet: %w", err)
+	}
+
+	headers := []string{
+		"School", "Class",
+		"Name", "Age", "RollNumber", "Gender", "HaveDisability",
+
+		"House No", "City", "State",
+
+		"Subject1", "Score", "Grade", "Class Category", "Passed",
+		"Subject2", "Score", "Grade", "Class Category", "Passed",
+		"Subject3", "Score", "Grade", "Class Category", "Passed",
+		"Subject4", "Score", "Grade", "Class Category", "Passed",
+		"Subject5", "Score", "Grade", "Class Category", "Passed",
+		"Subject6", "Score", "Grade", "Class Category", "Passed",
+	}
+
+	cellNames := make([]string, len(headers)) // to store cell names
+	for i, header := range headers {
+
+		// save cell names
+		cellName, err := excelize.ColumnNumberToName(i + 1)
+		if err != nil {
+			return fmt.Errorf("failed to get column name")
+		}
+
+		cellNames[i] = cellName
+		// set header values
+		f.SetCellValue(sheetName, cellName+"1", header)
+	}
+
+	row := 2
+
+	for _, class := range school.Classes {
+		for _, student := range class.Students {
+
+			// school and class
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[0], row), school.Name)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[1], row), class.Name)
+
+			// student detail
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[2], row), student.Name)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[3], row), student.Age)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[4], row), student.RollNumber)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[5], row), student.Gender)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[6], row), student.HaveDisability)
+
+			// set addresses
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[7], row), student.Address.HouseNumber)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[8], row), student.Address.City)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[9], row), student.Address.State)
+			// set score details
+			for i, subject := range student.Scores {
+
+				// each subject's details diff is 5
+				increment := (i * 5)
+				f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[10+increment], row), subject.Name)
+				f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[11+increment], row), subject.Score)
+				f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[12+increment], row), subject.Grade)
+				f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[13+increment], row), subject.ClassCategory)
+				f.SetCellValue(sheetName, fmt.Sprintf("%s%d", cellNames[14+increment], row), subject.Passed)
+			}
+
+			row++
+		}
+	}
+
+	f.SetActiveSheet(index)
+
+	fileName := OutDir + "/" + school.Name + ".xlsx"
+
+	if f.SaveAs(fileName); err != nil {
+		return fmt.Errorf("failed to save excel file: %w", err)
+	}
+
+	return nil
+}
+
 func WriteToFile(name string, data []byte) error {
 
 	file, err := os.Create(name)
@@ -60,18 +157,14 @@ func WriteToFile(name string, data []byte) error {
 	return nil
 }
 
-func GetAllNames() ([]string, error) {
-
-	var (
-		fileName  = "names.xls"
-		sheetName = "random"
-	)
+func GetAllNamesFromSheet(fileName, sheetName string) ([]string, error) {
 
 	f, err := excelize.OpenFile(fileName)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %v", fileName, err)
 	}
+
+	defer f.Close()
 
 	rows, err := f.GetRows(sheetName)
 	if err != nil {
@@ -87,126 +180,51 @@ func GetAllNames() ([]string, error) {
 	return names, nil
 }
 
-// school maker functionalities
-type SchoolMaker interface {
-	CreateSchool(schoolName string) types.School
-}
+func getAllStatesAndCitiesFromSheet(fileName, sheetName string) ([]types.State, error) {
 
-type schoolMaker struct {
-	mu            sync.RWMutex
-	studentsNames []string
-}
+	f, err := excelize.OpenFile(fileName)
 
-func NewSchoolMaker(names []string) SchoolMaker {
-
-	return &schoolMaker{
-		mu:            sync.RWMutex{},
-		studentsNames: names,
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %s: %v", fileName, err)
 	}
-}
+	defer f.Close()
 
-func (s *schoolMaker) CreateSchool(schoolName string) types.School {
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s sheet: %v", sheetName, err)
+	}
 
-	var (
-		classChan = make(chan types.Class, 3)
-		className string
-		classes   = make([]types.Class, TotalClasses)
-	)
+	states := make([]types.State, 3)
 
-	go func() {
-		// fire create class in separate goroutines to do concurrent
-		for i := 1; i <= TotalClasses; i++ {
+	var city, state string
 
-			// before we firing new go routine  check the limit of max goroutines run
-			startWorkChan <- struct{}{} // if the channel it's full then wait for others to complete their work
+	states[0].Name = "Kerala"
+	states[1].Name = "Tamil Nadu"
+	states[2].Name = "Karnataka"
 
-			className = fmt.Sprintf("class-%d", i)
-			go s.createClass(className, classChan)
+	for i := 1; i < len(rows); i++ {
+
+		city = rows[i][0]  //get city
+		state = rows[i][1] // get state
+
+		switch state {
+		case "Kerala":
+			states[0].Cities = append(states[0].Cities, city)
+		case "Tamil Nadu":
+			states[1].Cities = append(states[1].Cities, city)
+		case "Karnataka":
+			states[2].Cities = append(states[2].Cities, city)
 		}
 
-	}()
-
-	// receive all classes
-	for i := 1; i <= TotalClasses; i++ {
-
-		classes[i-1] = <-classChan
-		// release  values from channel whenever goroutines work completed by sending class
-		<-startWorkChan
+		// check map of districts have districts exist or not
+		// if _, ok := districts[district]; !ok {
+		// 	districts[district] = []string{city}
+		// } else {
+		// 	districts[district] = append(districts[district], city)
+		// }
 	}
 
-	return types.School{
-		Name:    schoolName,
-		Classes: classes,
-	}
-}
-
-func (s *schoolMaker) createClass(name string, classChan chan<- types.Class) {
-
-	fmt.Println("chan: ", name, "started....")
-
-	// select a random student count between min and max student count
-	studentCount := random.GetIntBetween(MinStudents, MaxStudents)
-
-	// students := s.getStudents(studentCount)
-	students := s.getStudentsNew(studentCount)
-
-	fmt.Println("chan: ", name, "completed....")
-
-	classChan <- types.Class{
-		Name:          name,
-		Students:      students,
-		TotalStudents: uint(len(students)),
-	}
-}
-
-func (s *schoolMaker) getStudentsNew(count int) []types.Student {
-
-	var (
-		nameChan    = make(chan string)
-		studentChan = make(chan []types.Student)
-
-		startIdx = 0
-		endIdx   = len(s.studentsNames) - 1
-	)
-
-	// run this make students in separate go routines to create student concurrently
-	go random.MakeStudents(nameChan, studentChan)
-
-	for i := 1; i <= count; i++ {
-		nameChan <- s.studentsNames[random.GetIntBetween(startIdx, endIdx)]
-	}
-
-	// once all the name send completed close the channel to notify the names completed
-	close(nameChan)
-
-	// receive the student lists and return it
-	return <-studentChan
-}
-
-// old way
-func (s *schoolMaker) getStudents(count int) []types.Student {
-
-	// get random students
-	return random.GetStudentsByNames(s.getNames(count))
-}
-
-func (s *schoolMaker) getNames(count int) []string {
-
-	names := make([]string, count)
-
-	var (
-		startIdx = 0
-		endIdx   = len(s.studentsNames) - 1
-	)
-
-	s.mu.RLock()
-	for i := range names {
-		// select a random name from the student names and add it
-		names[i] = s.studentsNames[random.GetIntBetween(startIdx, endIdx)]
-	}
-	s.mu.RUnlock()
-
-	return names
+	return states, nil
 }
 
 func main() {
@@ -221,24 +239,33 @@ func main() {
 		log.Fatal("failed to create output dir: ", err)
 	}
 
-	names, err := GetAllNames()
+	// get all states details from sheet
+	states, err := getAllStatesAndCitiesFromSheet(StatesSheetFileName, StatesSheetName)
+	if err != nil {
+		log.Fatal("failed to get all address from sheet: ", err)
+	}
+
+	// get all names from sheet
+	names, err := GetAllNamesFromSheet(NamesSheetFileName, NamesSheetName)
 
 	if err != nil {
 		log.Fatal("failed to get all names: ", err)
 	}
 
-	start := time.Now()
+	// create random generator
+	randomGen := random.NewRandomGenerator(states, names)
 
-	schoolMaker := NewSchoolMaker(names)
+	// using random generator and school details create shool maker
+	schoolMaker := school.NewSchoolMaker(MinStudents, MaxStudents, MaxClasses, randomGen)
 
+	// get the school name from user
 	fmt.Print("Enter the school name: ")
 	fmt.Scanf("%s", &schoolName)
 
+	start := time.Now()
 	school := schoolMaker.CreateSchool(schoolName)
 
-	_ = school
-
-	// write the school data on json and xml  file
+	// write the school data on json and excel  file
 	wg.Add(2)
 
 	go func() {
@@ -258,16 +285,10 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		data, err := ConvertToXML(school)
+		err := ConvertToExcel(school)
 		if err != nil {
-			log.Println("failed to convert school data to xml: ", err)
+			log.Println("failed to convert school data to excel: ", err)
 		}
-
-		fileName := OutDir + "/" + schoolName + ".xml"
-		if err := WriteToFile(fileName, data); err != nil {
-			log.Println("failed to write data to file as xml: ", err)
-		}
-
 	}()
 
 	wg.Wait()

@@ -10,7 +10,7 @@ var (
 )
 
 // To get a random gender from list of genders
-func GetGender() string {
+func (r *randomGenerator) getGender() string {
 
 	index := rand.Intn(len(genders))
 

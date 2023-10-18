@@ -15,7 +15,7 @@ var (
 )
 
 // To get a random score between 1 and maxScore
-func getSubjectScore() uint {
+func (r *randomGenerator) getSubjectScore() uint {
 
 	score := rand.Intn(MaxScore) + 1 // Intn func return (0 to maxMark-1); so adding 1 to it
 
@@ -23,7 +23,7 @@ func getSubjectScore() uint {
 }
 
 // To get all subjects with random scores
-func GetAllSubjects() []types.Subject {
+func (r *randomGenerator) getAllSubjects() []types.Subject {
 
 	subjects := make([]types.Subject, len(subjectNames))
 
@@ -32,7 +32,8 @@ func GetAllSubjects() []types.Subject {
 		subject := types.Subject{
 			Name: subjectNames[i],
 		}
-		subject.SetScore(getSubjectScore())
+
+		subject.SetScore(r.getSubjectScore())
 
 		subjects[i] = subject
 	}

@@ -1,9 +1,7 @@
 package random
 
 import (
-	"math/rand"
 	"school/types"
-	"sort"
 )
 
 const (
@@ -11,50 +9,7 @@ const (
 	MaxAge = 18
 )
 
-// To get random students by names
-func GetStudentsByNames(names []string) []types.Student {
-
-	// first sort the names
-	sort.Slice(names, func(i, j int) bool {
-		return names[i] < names[j]
-	})
-
-	// create slice of int for random indexes
-	randIndexes := make([]int, len(names))
-
-	// fill the index and make it randomized
-	for i := range randIndexes {
-		randIndexes[i] = i
-		// swap this number with its any of previous number to make the slice randomize
-		j := rand.Intn(i + 1)
-		randIndexes[i], randIndexes[j] = randIndexes[j], randIndexes[i]
-	}
-
-	students := make([]types.Student, len(names))
-
-	// in a class all students age should be almost same(like : 12,13,14)
-	randomAge := GetIntBetween(MinAge, MaxAge)
-
-	// new min and max age so in this call all students age will be in this new min and max age range
-	newMinAge, newMaxAge := randomAge-1, randomAge+1
-
-	for idx, randIdx := range randIndexes {
-
-		student := types.Student{
-			Name:       names[randIdx],
-			Age:        uint(GetIntBetween(newMinAge, newMaxAge)),
-			RollNumber: uint(randIdx) + 1,
-			Gender:     GetGender(),
-			Scores:     GetAllSubjects(),
-		}
-
-		students[idx] = student
-	}
-
-	return students
-}
-
-func MakeStudents(nameChan <-chan string, studentChan chan<- []types.Student) {
+func (r *randomGenerator) GetStudents(count int) []types.Student {
 
 	var students []types.Student
 
@@ -64,32 +19,33 @@ func MakeStudents(nameChan <-chan string, studentChan chan<- []types.Student) {
 	// new min and max age so in this call all students age will be in this new min and max age range
 	newMinAge, newMaxAge := randomAge-1, randomAge+1
 
-	// read until the name channel close
-	for name := range nameChan {
+	// read names and create add it until the name channel close
+	for i := 1; i <= count; i++ {
 
 		student := types.Student{
-			Name:   name,
-			Age:    uint(GetIntBetween(newMinAge, newMaxAge)),
-			Gender: GetGender(),
-			Scores: GetAllSubjects(),
+			Name:           r.getName(),
+			Age:            uint(GetIntBetween(newMinAge, newMaxAge)),
+			Gender:         r.getGender(),
+			Scores:         r.getAllSubjects(),
+			HaveDisability: r.isADisabilityPerson(),
+			Address:        r.getAddress(),
 		}
 
 		students = append(students, student)
 	}
 
-	// update the students role number
+	// update the students role number according to name
 	updateRoleNumber(students)
 
-	studentChan <- students
+	return students
 }
 
 func updateRoleNumber(students []types.Student) {
 
-	// call sort helper to sort and the same time set the appropriate roll number
+	// sort and update the role number according to the sorted name
 	sortAndUpdateRoleNumber(students, 0, len(students)-1)
 
-	// then shuffle the slice again
-
+	//shuffle the sorted students
 	for i := range students {
 		// select a random index from the previous the slice and swap with it
 		j := GetIntBetween(0, i)
@@ -97,15 +53,19 @@ func updateRoleNumber(students []types.Student) {
 	}
 }
 
+// using quick sort for sorting; reason each time finding pivot it's actually same for roll number
 func sortAndUpdateRoleNumber(arr []types.Student, start, end int) {
+
 	if start < end {
 		pivotIdx := partition(arr, start, end)
+		//  founded pivot index + 1 is the name's roll number
 		arr[pivotIdx].RollNumber = uint(pivotIdx) + 1
 		sortAndUpdateRoleNumber(arr, start, pivotIdx-1)
 		sortAndUpdateRoleNumber(arr, pivotIdx+1, end)
 	}
 
 	if start == end {
+		// if start and end is same; the roll number start or end + 1
 		arr[end].RollNumber = uint(end) + 1
 	}
 }
